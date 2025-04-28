@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>U.S. Seafood Consumption Analysis</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3-delaunay.v6.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        h1 {
+            margin-bottom: 10px;
+        }
+        h2 {
+            margin-top: 40px;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        .chart-container {
+            margin: 30px 0;
+            position: relative;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .filter-section {
+            margin-bottom: 15px;
+        }
+        .filter-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .checkbox-label {
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        label {
+            font-weight: bold;
+        }
+        select, button, input[type="checkbox"] {
+            cursor: pointer;
+        }
+        button {
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: none;
+            background-color: #3498db;
+            color: white;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 4px;
+            pointer-events: none;
+            font-size: 14px;
+            max-width: 300px;
+            line-height: 1.4;
+        }
+        .axis-label {
+            font-size: 14px;
+            fill: #333;
+        }
+        .legend {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
+        .state-label {
+            font-size: 10px;
+            fill: white;
+            pointer-events: none;
+            text-anchor: middle;
+            font-weight: bold;
+        }
+        .viz-container {
+            display: flex;
+            flex-direction: column;
+            gap: 40px;
+        }
+        .zoom-controls {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>U.S. Seafood Consumption Analysis</h1>
+        
+        <div class="viz-container">
+            <!-- Time Trend Visualization -->
+            <div class="time-trend-viz">
+                <h2>Seafood Consumption Over Time</h2>
+                
+                <div class="controls">
+                    <div class="filter-section">
+                        <div class="filter-title">Filter by Seafood Type:</div>
+                        <div id="category-filters"></div>
+                    </div>
+                    
+                    <div class="filter-section">
+                        <div class="filter-title">Time Period:</div>
+                        <div>
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="show-all" checked> Show All Years
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="zoom-controls">
+                    <button id="zoom-in">Zoom In</button>
+                    <button id="zoom-out">Zoom Out</button>
+                    <button id="reset-zoom">Reset Zoom</button>
+                </div>
+                
+                <div class="chart-container" id="time-chart"></div>
+            </div>
+            
+            <!-- State Consumption Visualization -->
+            <div class="state-viz">
+                <h2>Seafood Consumption by State</h2>
+                
+                <div class="controls">
+                    <div class="control-group">
+                        <label for="metric">Metric:</label>
+                        <select id="metric">
+                            <option value="total">Total Consumption</option>
+                            <option value="perCapita">Per Capita Consumption</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group">
+                        <label for="region">Region:</label>
+                        <select id="region">
+                            <option value="all">All States</option>
+                            <option value="Northeast">Northeast</option>
+                            <option value="Midwest">Midwest</option>
+                            <option value="South">South</option>
+                            <option value="West">West</option>
+                        </select>
+                    </div>
+                    
+                    <button id="reset-view">Reset View</button>
+                </div>
+                
+                <div class="chart-container" id="state-chart"></div>
+                <div class="legend" id="legend"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // ==============================================
+        // TIME TREND VISUALIZATION
+        // ==============================================
+        
+        // Sample data for time trend
+        const seafoodData = [
+            { year: 1970, category: "Fresh and Frozen", pounds: 10.5 },
+            { year: 1970, category: "Canned", pounds: 3.8 },
+            { year: 1970, category: "Cured", pounds: 0.6 },
+            { year: 1975, category: "Fresh and Frozen", pounds: 11.2 },
+            { year: 1975, category: "Canned", pounds: 4.1 },
+            { year: 1975, category: "Cured", pounds: 0.7 },
+            { year: 1980, category: "Fresh and Frozen", pounds: 12.8 },
+            { year: 1980, category: "Canned", pounds: 4.3 },
+            { year: 1980, category: "Cured", pounds: 0.6 },
+            { year: 1985, category: "Fresh and Frozen", pounds: 13.5 },
+            { year: 1985, category: "Canned", pounds: 4.5 },
+            { year: 1985, category: "Cured", pounds: 0.5 },
+            { year: 1990, category: "Fresh and Frozen", pounds: 14.2 },
+            { year: 1990, category: "Canned", pounds: 4.7 },
+            { year: 1990, category: "Cured", pounds: 0.4 },
+            { year: 1995, category: "Fresh and Frozen", pounds: 15.1 },
+            { year: 1995, category: "Canned", pounds: 4.9 },
+            { year: 1995, category: "Cured", pounds: 0.4 },
+            { year: 2000, category: "Fresh and Frozen", pounds: 15.8 },
+            { year: 2000, category: "Canned", pounds: 4.8 },
+            { year: 2000, category: "Cured", pounds: 0.3 },
+            { year: 2005, category: "Fresh and Frozen", pounds: 16.4 },
+            { year: 2005, category: "Canned", pounds: 4.6 },
+            { year: 2005, category: "Cured", pounds: 0.3 },
+            { year: 2010, category: "Fresh and Frozen", pounds: 17.2 },
+            { year: 2010, category: "Canned", pounds: 4.4 },
+            { year: 2010, category: "Cured", pounds: 0.3 },
+            { year: 2015, category: "Fresh and Frozen", pounds: 18.1 },
+            { year: 2015, category: "Canned", pounds: 4.2 },
+            { year: 2015, category: "Cured", pounds: 0.3 },
+            { year: 2020, category: "Fresh and Frozen", pounds: 19.3 },
+            { year: 2020, category: "Canned", pounds: 4.0 },
+            { year: 2020, category: "Cured", pounds: 0.3 }
+        ];
+
+        // Set up dimensions and margins for time chart
+        const timeMargin = { top: 50, right: 80, bottom: 70, left: 60 };
+        const timeWidth = 900 - timeMargin.left - timeMargin.right;
+        const timeHeight = 400 - timeMargin.top - timeMargin.bottom;
+
+        // Create SVG container for time chart
+        const timeSvg = d3.select("#time-chart")
+            .append("svg")
+            .attr("width", timeWidth + timeMargin.left + timeMargin.right)
+            .attr("height", timeHeight + timeMargin.top + timeMargin.bottom)
+            .append("g")
+            .attr("transform", `translate(${timeMargin.left},${timeMargin.top})`);
+
+        // Create scales for time chart
+        let timeX = d3.scaleLinear()
+            .domain(d3.extent(seafoodData, d => d.year))
+            .range([0, timeWidth]);
+
+        let timeY = d3.scaleLinear()
+            .domain([0, d3.max(seafoodData, d => d.pounds) * 1.1])
+            .range([timeHeight, 0]);
+
+        // Create axes for time chart
+        const timeXAxis = timeSvg.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${timeHeight})`)
+            .call(d3.axisBottom(timeX).tickFormat(d3.format("d")));
+
+        const timeYAxis = timeSvg.append("g")
+            .attr("class", "y-axis")
+            .call(d3.axisLeft(timeY));
+
+        // Add axis labels for time chart
+        timeSvg.append("text")
+            .attr("class", "axis-label")
+            .attr("x", timeWidth / 2)
+            .attr("y", timeHeight + timeMargin.bottom - 10)
+            .style("text-anchor", "middle")
+            .text("Year");
+
+        timeSvg.append("text")
+            .attr("class", "axis-label")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -timeHeight / 2)
+            .attr("y", -timeMargin.left + 15)
+            .style("text-anchor", "middle")
+            .text("Consumption (pounds per capita)");
+
+        // Add chart title for time chart
+        timeSvg.append("text")
+            .attr("x", timeWidth / 2)
+            .attr("y", -20)
+            .attr("text-anchor", "middle")
+            .style("font-size", "16px")
+            .text("Trend of U.S. Seafood Consumption Over Time");
+
+        // Color scale for categories
+        const timeColor = d3.scaleOrdinal()
+            .domain(["Fresh and Frozen", "Canned", "Cured"])
+            .range(["#1f77b4", "#ff7f0e", "#2ca02c"]);
+
+        // Create line generator
+        const line = d3.line()
+            .x(d => timeX(d.year))
+            .y(d => timeY(d.pounds));
+
+        // Group data by category
+        const dataByCategory = d3.group(seafoodData, d => d.category);
+
+        // Create checkbox filters for categories
+        const categories = Array.from(dataByCategory.keys());
+        const categoryFilters = d3.select("#category-filters");
+
+        categories.forEach(category => {
+            categoryFilters.append("label")
+                .attr("class", "checkbox-label")
+                .html(`<input type="checkbox" class="category-checkbox" value="${category}" checked> ${category}`)
+                .attr("title", category);
+        });
+
+        // Initialize zoom behavior for time chart
+        const timeZoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [timeWidth, timeHeight]])
+            .extent([[0, 0], [timeWidth, timeHeight]])
+            .on("zoom", timeZoomed);
+
+        timeSvg.call(timeZoom);
+
+        // Draw initial lines for time chart
+        updateTimeChart();
+
+        // Set up event listeners for time chart
+        d3.selectAll(".category-checkbox").on("change", updateTimeChart);
+        
+        // Zoom controls for time chart
+        d3.select("#zoom-in").on("click", () => {
+            timeSvg.transition().call(timeZoom.scaleBy, 2);
+        });
+
+        d3.select("#zoom-out").on("click", () => {
+            timeSvg.transition().call(timeZoom.scaleBy, 0.5);
+        });
+
+        d3.select("#reset-zoom").on("click", () => {
+            timeSvg.transition().call(timeZoom.transform, d3.zoomIdentity);
+        });
+
+        // Tooltip
+        const tooltip = d3.select("#tooltip");
+
+        // Zoom function for time chart
+        function timeZoomed(event) {
+            const newX = event.transform.rescaleX(timeX);
+            timeXAxis.call(d3.axisBottom(newX).tickFormat(d3.format("d")));
+            
+            // Redraw lines with new scale
+            timeSvg.selectAll(".line")
+                .attr("d", d => line.x(dd => newX(dd.year))(d.values));
+        }
+
+        // Update time chart based on filters
+        function updateTimeChart() {
+            // Get selected categories
+            const selectedCategories = [];
+            d3.selectAll(".category-checkbox:checked").each(function() {
+                selectedCategories.push(this.value);
+            });
+
+            // Filter data
+            const filteredData = seafoodData.filter(d => 
+                selectedCategories.includes(d.category)
+            );
+
+            // Group filtered data by category
+            const filteredDataByCategory = d3.group(filteredData, d => d.category);
+
+            // Remove existing lines
+            timeSvg.selectAll(".line").remove();
+            timeSvg.selectAll(".dot").remove();
+
+            // Draw new lines
+            const lines = timeSvg.selectAll(".line")
+                .data(Array.from(filteredDataByCategory))
+                .enter()
+                .append("path")
+                .attr("class", "line")
+                .attr("d", d => line(d[1]))
+                .attr("stroke", d => timeColor(d[0]))
+                .attr("stroke-width", 2)
+                .attr("fill", "none");
+
+            // Add dots for data points
+            const dots = timeSvg.selectAll(".dot-group")
+                .data(Array.from(filteredDataByCategory))
+                .enter()
+                .append("g")
+                .attr("class", "dot-group");
+
+            dots.selectAll(".dot")
+                .data(d => d[1])
+                .enter()
+                .append("circle")
+                .attr("class", "dot")
+                .attr("cx", d => timeX(d.year))
+                .attr("cy", d => timeY(d.pounds))
+                .attr("r", 4)
+                .attr("fill", d => timeColor(d.category))
+                .on("mouseover", showTimeTooltip)
+                .on("mouseout", hideTooltip);
+
+            // Add legend
+            updateTimeLegend(selectedCategories);
+        }
+
+        // Update legend for time chart
+        function updateTimeLegend(categories) {
+            // Remove existing legend
+            timeSvg.selectAll(".legend").remove();
+
+            // Add new legend
+            const legend = timeSvg.selectAll(".legend")
+                .data(categories)
+                .enter()
+                .append("g")
+                .attr("class", "legend")
+                .attr("transform", (d, i) => `translate(${timeWidth - 150},${i * 20})`);
+
+            legend.append("rect")
+                .attr("width", 18)
+                .attr("height", 18)
+                .attr("fill", d => timeColor(d));
+
+            legend.append("text")
+                .attr("x", 24)
+                .attr("y", 9)
+                .attr("dy", ".35em")
+                .style("text-anchor", "start")
+                .text(d => d);
+        }
+
+        // Tooltip functions for time chart
+        function showTimeTooltip(event, d) {
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", 0.9);
+            
+            tooltip.html(`
+                <div><strong>${d.category}</strong></div>
+                <div>Year: ${d.year}</div>
+                <div>Consumption: ${d.pounds.toFixed(1)} lbs/capita</div>
+            `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 28) + "px");
+        }
+
+        // ==============================================
+        // STATE CONSUMPTION VISUALIZATION
+        // ==============================================
+        
+        // Sample data for state consumption
+        const stateData = [
+            { state: "Alabama", region: "South", population: 4903185, totalConsumption: 125.4, perCapita: 25.6 },
+            { state: "Alaska", region: "West", population: 731545, totalConsumption: 98.7, perCapita: 135.0 },
+            { state: "Arizona", region: "West", population: 7278717, totalConsumption: 87.5, perCapita: 12.0 },
+            { state: "Arkansas", region: "South", population: 3017804, totalConsumption: 65.2, perCapita: 21.6 },
+            { state: "California", region: "West", population: 39512223, totalConsumption: 425.8, perCapita: 10.8 },
+            { state: "Colorado", region: "West", population: 5758736, totalConsumption: 72.3, perCapita: 12.6 },
+            { state: "Connecticut", region: "Northeast", population: 3565287, totalConsumption: 48.9, perCapita: 13.7 },
+            { state: "Delaware", region: "South", population: 973764, totalConsumption: 12.5, perCapita: 12.8 },
+            { state: "Florida", region: "South", population: 21477737, totalConsumption: 312.4, perCapita: 14.5 },
+            { state: "Georgia", region: "South", population: 10617423, totalConsumption: 145.2, perCapita: 13.7 },
+            { state: "Hawaii", region: "West", population: 1415872, totalConsumption: 42.5, perCapita: 30.0 },
+            { state: "Idaho", region: "West", population: 1787065, totalConsumption: 21.4, perCapita: 12.0 },
+            { state: "Illinois", region: "Midwest", population: 12671821, totalConsumption: 158.7, perCapita: 12.5 },
+            { state: "Indiana", region: "Midwest", population: 6732219, totalConsumption: 80.8, perCapita: 12.0 },
+            { state: "Iowa", region: "Midwest", population: 3155070, totalConsumption: 37.9, perCapita: 12.0 },
+            { state: "Kansas", region: "Midwest", population: 2913314, totalConsumption: 34.9, perCapita: 12.0 },
+            { state: "Kentucky", region: "South", population: 4467673, totalConsumption: 53.6, perCapita: 12.0 },
+            { state: "Louisiana", region: "South", population: 4648794, totalConsumption: 185.9, perCapita: 40.0 },
+            { state: "Maine", region: "Northeast", population: 1344212, totalConsumption: 67.2, perCapita: 50.0 },
+            { state: "Maryland", region: "South", population: 6045680, totalConsumption: 96.7, perCapita: 16.0 },
+            { state: "Massachusetts", region: "Northeast", population: 6892503, totalConsumption: 110.3, perCapita: 16.0 },
+            { state: "Michigan", region: "Midwest", population: 9986857, totalConsumption: 119.8, perCapita: 12.0 },
+            { state: "Minnesota", region: "Midwest", population: 5639632, totalConsumption: 67.7, perCapita: 12.0 },
+            { state: "Mississippi", region: "South", population: 2976149, totalConsumption: 59.5, perCapita: 20.0 },
+            { state: "Missouri", region: "Midwest", population: 6137428, totalConsumption: 73.6, perCapita: 12.0 },
+            { state: "Montana", region: "West", population: 1068778, totalConsumption: 12.8, perCapita: 12.0 },
+            { state: "Nebraska", region: "Midwest", population: 1934408, totalConsumption: 23.2, perCapita: 12.0 },
+            { state: "Nevada", region: "West", population: 3080156, totalConsumption: 36.9, perCapita: 12.0 },
+            { state: "New Hampshire", region: "Northeast", population: 1359711, totalConsumption: 16.3, perCapita: 12.0 },
+            { state: "New Jersey", region: "Northeast", population: 8882190, totalConsumption: 142.1, perCapita: 16.0 },
+            { state: "New Mexico", region: "West", population: 2096829, totalConsumption: 25.2, perCapita: 12.0 },
+            { state: "New York", region: "Northeast", population: 19453561, totalConsumption: 311.3, perCapita: 16.0 },
+            { state: "North Carolina", region: "South", population: 10488084, totalConsumption: 167.8, perCapita: 16.0 },
+            { state: "North Dakota", region: "Midwest", population: 762062, totalConsumption: 9.1, perCapita: 12.0 },
+            { state: "Ohio", region: "Midwest", population: 11689100, totalConsumption: 140.3, perCapita: 12.0 },
+            { state: "Oklahoma", region: "South", population: 3956971, totalConsumption: 47.5, perCapita: 12.0 },
+            { state: "Oregon", region: "West", population: 4217737, totalConsumption: 67.5, perCapita: 16.0 },
+            { state: "Pennsylvania", region: "Northeast", population: 12801989, totalConsumption: 179.2, perCapita: 14.0 },
+            { state: "Rhode Island", region: "Northeast", population: 1059361, totalConsumption: 21.2, perCapita: 20.0 },
+            { state: "South Carolina", region: "South", population: 5148714, totalConsumption: 82.4, perCapita: 16.0 },
+            { state: "South Dakota", region: "Midwest", population: 884659, totalConsumption: 10.6, perCapita: 12.0 },
+            { state: "Tennessee", region: "South", population: 6829174, totalConsumption: 81.9, perCapita: 12.0 },
+            { state: "Texas", region: "South", population: 28995881, totalConsumption: 405.9, perCapita: 14.0 },
+            { state: "Utah", region: "West", population: 3205958, totalConsumption: 38.5, perCapita: 12.0 },
+            { state: "Vermont", region: "Northeast", population: 623989, totalConsumption: 8.7, perCapita: 14.0 },
+            { state: "Virginia", region: "South", population: 8535519, totalConsumption: 136.6, perCapita: 16.0 },
+            { state: "Washington", region: "West", population: 7614893, totalConsumption: 152.3, perCapita: 20.0 },
+            { state: "West Virginia", region: "South", population: 1792147, totalConsumption: 21.5, perCapita: 12.0 },
+            { state: "Wisconsin", region: "Midwest", population: 5822434, totalConsumption: 81.5, perCapita: 14.0 },
+            { state: "Wyoming", region: "West", population: 578759, totalConsumption: 6.9, perCapita: 12.0 }
+        ];
+
+        // Set up dimensions for state chart
+        const stateWidth = 900;
+        const stateHeight = 500;
+
+        // Color scale by region
+        const stateColor = d3.scaleOrdinal()
+            .domain(["Northeast", "Midwest", "South", "West"])
+            .range(["#4e79a7", "#f28e2b", "#e15759", "#76b7b2"]);
+
+        // Create SVG container for state chart
+        const stateSvg = d3.select("#state-chart")
+            .append("svg")
+            .attr("width", stateWidth)
+            .attr("height", stateHeight);
+
+        // Initial render for state chart
+        updateStateChart();
+
+        // Event listeners for state chart
+        d3.select("#metric").on("change", updateStateChart);
+        d3.select("#region").on("change", updateStateChart);
+        d3.select("#reset-view").on("click", resetStateView);
+
+        function updateStateChart() {
+            const metric = d3.select("#metric").property("value");
+            const regionFilter = d3.select("#region").property("value");
+            
+            // Filter data
+            let filteredData = stateData;
+            if (regionFilter !== "all") {
+                filteredData = stateData.filter(d => d.region === regionFilter);
+            }
+            
+            // Determine size based on selected metric
+            const sizeValue = d => metric === "perCapita" ? d.perCapita : d.totalConsumption;
+            const sizeScale = d3.scaleSqrt()
+                .domain([0, d3.max(filteredData, sizeValue)])
+                .range([5, metric === "perCapita" ? 50 : 80]);
+            
+            // Clear previous chart
+            stateSvg.selectAll("*").remove();
+            
+            // Create simulation for bubble positions
+            const simulation = d3.forceSimulation(filteredData)
+                .force("x", d3.forceX(stateWidth / 2).strength(0.05))
+                .force("y", d3.forceY(stateHeight / 2).strength(0.05))
+                .force("collide", d3.forceCollide(d => sizeScale(sizeValue(d)) + 1))
+                .stop();
+            
+            // Run simulation to initial positions
+            for (let i = 0; i < 100; i++) simulation.tick();
+            
+            // Create Voronoi diagram for better hover
+            const delaunay = d3.Delaunay.from(
+                filteredData,
+                d => d.x,
+                d => d.y
+            );
+            const voronoi = delaunay.voronoi([0, 0, stateWidth, stateHeight]);
+            
+            // Add Voronoi cells (invisible but help with hover)
+            stateSvg.append("g")
+                .selectAll("path")
+                .data(filteredData)
+                .enter()
+                .append("path")
+                .attr("d", (d, i) => voronoi.renderCell(i))
+                .attr("fill", "none")
+                .attr("stroke", "none")
+                .attr("pointer-events", "all")
+                .on("mouseover", showStateTooltip)
+                .on("mouseout", hideTooltip)
+                .on("click", zoomToState);
+            
+            // Draw bubbles
+            stateSvg.selectAll(".bubble")
+                .data(filteredData)
+                .enter()
+                .append("circle")
+                .attr("class", "bubble")
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y)
+                .attr("r", d => sizeScale(sizeValue(d)))
+                .attr("fill", d => stateColor(d.region))
+                .attr("opacity", 0.8)
+                .attr("stroke", "#fff")
+                .attr("stroke-width", 1)
+                .on("mouseover", showStateTooltip)
+                .on("mouseout", hideTooltip)
+                .on("click", zoomToState);
+            
+            // Add state abbreviations
+            stateSvg.selectAll(".state-label")
+                .data(filteredData)
+                .enter()
+                .append("text")
+                .attr("class", "state-label")
+                .attr("x", d => d.x)
+                .attr("y", d => d.y)
+                .attr("dy", "0.35em")
+                .text(d => d.state.substring(0, 2).toUpperCase())
+                .attr("font-size", d => Math.min(sizeScale(sizeValue(d)) / 2, 12));
+            
+            // Update legend
+            updateStateLegend(metric, regionFilter);
+        }
+        
+        function updateStateLegend(metric, regionFilter) {
+            const legend = d3.select("#legend").html("");
+            
+            if (regionFilter === "all") {
+                stateColor.domain().forEach(region => {
+                    const item = legend.append("div")
+                        .attr("class", "legend-item");
+                    
+                    item.append("div")
+                        .attr("class", "legend-color")
+                        .style("background-color", stateColor(region));
+                    
+                    item.append("div")
+                        .text(region);
+                });
+            }
+            
+            // Add metric explanation
+            legend.append("div")
+                .style("margin-left", "20px")
+                .style("font-style", "italic")
+                .text(metric === "perCapita" 
+                    ? "Circle size = Pounds per capita" 
+                    : "Circle size = Total consumption (millions of lbs)");
+        }
+        
+        function showStateTooltip(event, d) {
+            const metric = d3.select("#metric").property("value");
+            const value = metric === "perCapita" ? d.perCapita : d.totalConsumption;
+            const valueText = metric === "perCapita" 
+                ? `${d.perCapita.toFixed(1)} lbs per capita` 
+                : `${d.totalConsumption.toFixed(1)} million lbs total`;
+            
+            tooltip.html(`
+                <div><strong>${d.state}</strong></div>
+                <div>Region: ${d.region}</div>
+                <div>Population: ${d.population.toLocaleString()}</div>
+                <div>${valueText}</div>
+            `)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 28) + "px")
+            .style("opacity", 0.9);
+            
+            // Highlight this bubble
+            d3.select(event.target).attr("stroke", "#333").attr("stroke-width", 2);
+        }
+        
+        function hideTooltip(event) {
+            tooltip.style("opacity", 0);
+            if (event && event.target) {
+                d3.select(event.target).attr("stroke", "#fff").attr("stroke-width", 1);
+            }
+        }
+        
+        function zoomToState(event, d) {
+            const metric = d3.select("#metric").property("value");
+            const sizeScale = d3.scaleSqrt()
+                .domain([0, d3.max(stateData, dd => metric === "perCapita" ? dd.perCapita : dd.totalConsumption)])
+                .range([5, metric === "perCapita" ? 50 : 80]);
+            
+            const bubbleSize = sizeScale(metric === "perCapita" ? d.perCapita : d.totalConsumption);
+            
+            stateSvg.transition()
+                .duration(750)
+                .attr("viewBox", [
+                    d.x - bubbleSize * 3, 
+                    d.y - bubbleSize * 3, 
+                    bubbleSize * 6, 
+                    bubbleSize * 6
+                ].join(" "));
+        }
+        
+        function resetStateView() {
+            stateSvg.transition()
+                .duration(750)
+                .attr("viewBox", [0, 0, stateWidth, stateHeight].join(" "));
+        }
+    </script>
+</body>
+</html>
