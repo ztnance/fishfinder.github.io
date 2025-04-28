@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>U.S. Seafood Consumption Growth (1970-2020)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+        .chart-container {
+            margin-top: 30px;
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .filter-section {
+            margin-bottom: 15px;
+        }
+        .filter-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .checkbox-label {
+            margin-right: 15px;
+            cursor: pointer;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 5px;
+            pointer-events: none;
+            font-size: 14px;
+        }
+        .axis-label {
+            font-size: 14px;
+            fill: #333;
+        }
+        .zoom-controls {
+            margin-top: 10px;
+        }
+        button {
+            padding: 5px 10px;
+            margin-right: 5px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>U.S. Seafood Consumption Growth (1970-2020)</h1>
+        
+        <div class="controls">
+            <div class="filter-section">
+                <div class="filter-title">Filter by Seafood Type:</div>
+                <div id="category-filters"></div>
+            </div>
+            
+            <div class="filter-section">
+                <div class="filter-title">Time Period:</div>
+                <div>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="show-all" checked> Show All Years
+                    </label>
+                    <div id="year-slider" style="width: 300px; margin-top: 10px;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="zoom-controls">
+            <button id="zoom-in">Zoom In</button>
+            <button id="zoom-out">Zoom Out</button>
+            <button id="reset-zoom">Reset Zoom</button>
+        </div>
+        
+        <div class="chart-container" id="chart"></div>
+    </div>
+
+    <div class="tooltip" id="tooltip" style="opacity: 0;"></div>
+
+    <script>
+        // Sample data - in a real app, you would load this from USDA API or CSV
+        const seafoodData = [
+            { year: 1970, category: "Fresh and Frozen", pounds: 10.5 },
+            { year: 1970, category: "Canned", pounds: 3.8 },
+            { year: 1970, category: "Cured", pounds: 0.6 },
+            { year: 1975, category: "Fresh and Frozen", pounds: 11.2 },
+            { year: 1975, category: "Canned", pounds: 4.1 },
+            { year: 1975, category: "Cured", pounds: 0.7 },
+            { year: 1980, category: "Fresh and Frozen", pounds: 12.8 },
+            { year: 1980, category: "Canned", pounds: 4.3 },
+            { year: 1980, category: "Cured", pounds: 0.6 },
+            { year: 1985, category: "Fresh and Frozen", pounds: 13.5 },
+            { year: 1985, category: "Canned", pounds: 4.5 },
+            { year: 1985, category: "Cured", pounds: 0.5 },
+            { year: 1990, category: "Fresh and Frozen", pounds: 14.2 },
+            { year: 1990, category: "Canned", pounds: 4.7 },
+            { year: 1990, category: "Cured", pounds: 0.4 },
+            { year: 1995, category: "Fresh and Frozen", pounds: 15.1 },
+            { year: 1995, category: "Canned", pounds: 4.9 },
+            { year: 1995, category: "Cured", pounds: 0.4 },
+            { year: 2000, category: "Fresh and Frozen", pounds: 15.8 },
+            { year: 2000, category: "Canned", pounds: 4.8 },
+            { year: 2000, category: "Cured", pounds: 0.3 },
+            { year: 2005, category: "Fresh and Frozen", pounds: 16.4 },
+            { year: 2005, category: "Canned", pounds: 4.6 },
+            { year: 2005, category: "Cured", pounds: 0.3 },
+            { year: 2010, category: "Fresh and Frozen", pounds: 17.2 },
+            { year: 2010, category: "Canned", pounds: 4.4 },
+            { year: 2010, category: "Cured", pounds: 0.3 },
+            { year: 2015, category: "Fresh and Frozen", pounds: 18.1 },
+            { year: 2015, category: "Canned", pounds: 4.2 },
+            { year: 2015, category: "Cured", pounds: 0.3 },
+            { year: 2020, category: "Fresh and Frozen", pounds: 19.3 },
+            { year: 2020, category: "Canned", pounds: 4.0 },
+            { year: 2020, category: "Cured", pounds: 0.3 }
+        ];
+
+        // Set up dimensions and margins
+        const margin = { top: 50, right: 80, bottom: 70, left: 60 };
+        const width = 900 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        // Create SVG container
+        const svg = d3.select("#chart")
+            .append("svg")
+            .attr("width", width + margin.left + margin.right)
+            .attr("height", height + margin.top + margin.bottom)
+            .append("g")
+            .attr("transform", `translate(${margin.left},${margin.top})`);
+
+        // Create scales
+        let x = d3.scaleLinear()
+            .domain(d3.extent(seafoodData, d => d.year))
+            .range([0, width]);
+
+        let y = d3.scaleLinear()
+            .domain([0, d3.max(seafoodData, d => d.pounds) * 1.1])
+            .range([height, 0]);
+
+        // Create axes
+        const xAxis = svg.append("g")
+            .attr("class", "x-axis")
+            .attr("transform", `translate(0,${height})`)
+            .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+        const yAxis = svg.append("g")
+            .attr("class", "y-axis")
+            .call(d3.axisLeft(y));
+
+        // Add axis labels
+        svg.append("text")
+            .attr("class", "axis-label")
+            .attr("x", width / 2)
+            .attr("y", height + margin.bottom - 10)
+            .style("text-anchor", "middle")
+            .text("Year");
+
+        svg.append("text")
+            .attr("class", "axis-label")
+            .attr("transform", "rotate(-90)")
+            .attr("x", -height / 2)
+            .attr("y", -margin.left + 15)
+            .style("text-anchor", "middle")
+            .text("Consumption (pounds per capita)");
+
+        // Add chart title
+        svg.append("text")
+            .attr("x", width / 2)
+            .attr("y", -20)
+            .attr("text-anchor", "middle")
+            .style("font-size", "16px")
+            .style("font-weight", "bold")
+            .text("U.S. Seafood Consumption Over Time");
+
+        // Color scale for categories
+        const color = d3.scaleOrdinal()
+            .domain(["Fresh and Frozen", "Canned", "Cured"])
+            .range(["#1f77b4", "#ff7f0e", "#2ca02c"]);
+
+        // Create line generator
+        const line = d3.line()
+            .x(d => x(d.year))
+            .y(d => y(d.pounds));
+
+        // Group data by category
+        const dataByCategory = d3.group(seafoodData, d => d.category);
+
+        // Create checkbox filters for categories
+        const categories = Array.from(dataByCategory.keys());
+        const categoryFilters = d3.select("#category-filters");
+
+        categories.forEach(category => {
+            categoryFilters.append("label")
+                .attr("class", "checkbox-label")
+                .html(`<input type="checkbox" class="category-checkbox" value="${category}" checked> ${category}`)
+                .attr("title", category);
+        });
+
+        // Initialize zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([1, 10])
+            .translateExtent([[0, 0], [width, height]])
+            .extent([[0, 0], [width, height]])
+            .on("zoom", zoomed);
+
+        svg.call(zoom);
+
+        // Draw initial lines
+        updateChart();
+
+        // Set up event listeners
+        d3.selectAll(".category-checkbox").on("change", updateChart);
+        d3.select("#show-all").on("change", function() {
+            if (this.checked) {
+                d3.select("#year-slider").style("opacity", 0.5);
+                updateChart();
+            } else {
+                d3.select("#year-slider").style("opacity", 1);
+            }
+        });
+
+        // Zoom controls
+        d3.select("#zoom-in").on("click", () => {
+            svg.transition().call(zoom.scaleBy, 2);
+        });
+
+        d3.select("#zoom-out").on("click", () => {
+            svg.transition().call(zoom.scaleBy, 0.5);
+        });
+
+        d3.select("#reset-zoom").on("click", () => {
+            svg.transition().call(zoom.transform, d3.zoomIdentity);
+        });
+
+        // Tooltip
+        const tooltip = d3.select("#tooltip");
+
+        // Initialize year slider (simplified for this example)
+        // In a real app, you would implement a proper slider with d3 or a library
+        d3.select("#year-slider")
+            .append("input")
+            .attr("type", "range")
+            .attr("min", 1970)
+            .attr("max", 2020)
+            .attr("value", 2020)
+            .attr("disabled", true)
+            .style("opacity", 0.5)
+            .on("input", function() {
+                if (!d3.select("#show-all").property("checked")) {
+                    const selectedYear = +this.value;
+                    updateChart();
+                }
+            });
+
+        // Zoom function
+        function zoomed(event) {
+            const newX = event.transform.rescaleX(x);
+            xAxis.call(d3.axisBottom(newX).tickFormat(d3.format("d")));
+            
+            // Redraw lines with new scale
+            svg.selectAll(".line")
+                .attr("d", d => line.x(dd => newX(dd.year))(d.values));
+        }
+
+        // Update chart based on filters
+        function updateChart() {
+            // Get selected categories
+            const selectedCategories = [];
+            d3.selectAll(".category-checkbox:checked").each(function() {
+                selectedCategories.push(this.value);
+            });
+
+            // Filter data
+            const filteredData = seafoodData.filter(d => 
+                selectedCategories.includes(d.category)
+            );
+
+            // Group filtered data by category
+            const filteredDataByCategory = d3.group(filteredData, d => d.category);
+
+            // Remove existing lines
+            svg.selectAll(".line").remove();
+            svg.selectAll(".dot").remove();
+
+            // Draw new lines
+            const lines = svg.selectAll(".line")
+                .data(Array.from(filteredDataByCategory))
+                .enter()
+                .append("path")
+                .attr("class", "line")
+                .attr("d", d => line(d[1]))
+                .attr("stroke", d => color(d[0]))
+                .attr("stroke-width", 2)
+                .attr("fill", "none");
+
+            // Add dots for data points
+            const dots = svg.selectAll(".dot-group")
+                .data(Array.from(filteredDataByCategory))
+                .enter()
+                .append("g")
+                .attr("class", "dot-group");
+
+            dots.selectAll(".dot")
+                .data(d => d[1])
+                .enter()
+                .append("circle")
+                .attr("class", "dot")
+                .attr("cx", d => x(d.year))
+                .attr("cy", d => y(d.pounds))
+                .attr("r", 4)
+                .attr("fill", d => color(d.category))
+                .on("mouseover", showTooltip)
+                .on("mouseout", hideTooltip);
+
+            // Add legend
+            updateLegend(selectedCategories);
+        }
+
+        // Update legend
+        function updateLegend(categories) {
+            // Remove existing legend
+            svg.selectAll(".legend").remove();
+
+            // Add new legend
+            const legend = svg.selectAll(".legend")
+                .data(categories)
+                .enter()
+                .append("g")
+                .attr("class", "legend")
+                .attr("transform", (d, i) => `translate(${width - 150},${i * 20})`);
+
+            legend.append("rect")
+                .attr("width", 18)
+                .attr("height", 18)
+                .attr("fill", d => color(d));
+
+            legend.append("text")
+                .attr("x", 24)
+                .attr("y", 9)
+                .attr("dy", ".35em")
+                .style("text-anchor", "start")
+                .text(d => d);
+        }
+
+        // Tooltip functions
+        function showTooltip(event, d) {
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", 0.9);
+            
+            tooltip.html(`
+                <div><strong>${d.category}</strong></div>
+                <div>Year: ${d.year}</div>
+                <div>Consumption: ${d.pounds.toFixed(1)} lbs/capita</div>
+            `)
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 28) + "px");
+        }
+
+        function hideTooltip() {
+            tooltip.transition()
+                .duration(500)
+                .style("opacity", 0);
+        }
+    </script>
+</body>
+</html>
