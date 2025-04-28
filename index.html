@@ -197,157 +197,152 @@
     <div class="tooltip" id="tooltip"></div>
 
     <script>
-        const seafoodData = [
-            { year: 1970, category: "Fresh and Frozen", pounds: 10.5 },
-            { year: 1970, category: "Canned", pounds: 3.8 },
-            { year: 1970, category: "Cured", pounds: 0.6 },
-            { year: 1975, category: "Fresh and Frozen", pounds: 11.2 },
-            { year: 1975, category: "Canned", pounds: 4.1 },
-            { year: 1975, category: "Cured", pounds: 0.7 },
-            { year: 1980, category: "Fresh and Frozen", pounds: 12.8 },
-            { year: 1980, category: "Canned", pounds: 4.3 },
-            { year: 1980, category: "Cured", pounds: 0.6 },
-            { year: 1985, category: "Fresh and Frozen", pounds: 13.5 },
-            { year: 1985, category: "Canned", pounds: 4.5 },
-            { year: 1985, category: "Cured", pounds: 0.5 },
-            { year: 1990, category: "Fresh and Frozen", pounds: 14.2 },
-            { year: 1990, category: "Canned", pounds: 4.7 },
-            { year: 1990, category: "Cured", pounds: 0.4 },
-            { year: 1995, category: "Fresh and Frozen", pounds: 15.1 },
-            { year: 1995, category: "Canned", pounds: 4.9 },
-            { year: 1995, category: "Cured", pounds: 0.4 },
-            { year: 2000, category: "Fresh and Frozen", pounds: 15.8 },
-            { year: 2000, category: "Canned", pounds: 4.8 },
-            { year: 2000, category: "Cured", pounds: 0.3 },
-            { year: 2005, category: "Fresh and Frozen", pounds: 16.4 },
-            { year: 2005, category: "Canned", pounds: 4.6 },
-            { year: 2005, category: "Cured", pounds: 0.3 },
-            { year: 2010, category: "Fresh and Frozen", pounds: 17.2 },
-            { year: 2010, category: "Canned", pounds: 4.4 },
-            { year: 2010, category: "Cured", pounds: 0.3 },
-            { year: 2015, category: "Fresh and Frozen", pounds: 18.1 },
-            { year: 2015, category: "Canned", pounds: 4.2 },
-            { year: 2015, category: "Cured", pounds: 0.3 },
-            { year: 2020, category: "Fresh and Frozen", pounds: 19.3 },
-            { year: 2020, category: "Canned", pounds: 4.0 },
-            { year: 2020, category: "Cured", pounds: 0.3 }
-        ];
-
-        // Set up dimensions and margins for time chart
-        const timeMargin = { top: 50, right: 80, bottom: 70, left: 60 };
-        const timeWidth = 900 - timeMargin.left - timeMargin.right;
-        const timeHeight = 400 - timeMargin.top - timeMargin.bottom;
-
-        // Create SVG container for time chart
-        const timeSvg = d3.select("#time-chart")
-            .append("svg")
-            .attr("width", timeWidth + timeMargin.left + timeMargin.right)
-            .attr("height", timeHeight + timeMargin.top + timeMargin.bottom)
-            .append("g")
-            .attr("transform", `translate(${timeMargin.left},${timeMargin.top})`);
-
-        // Create scales for time chart
-        let timeX = d3.scaleLinear()
-            .domain(d3.extent(seafoodData, d => d.year))
-            .range([0, timeWidth]);
-
-        let timeY = d3.scaleLinear()
-            .domain([0, d3.max(seafoodData, d => d.pounds) * 1.1])
-            .range([timeHeight, 0]);
-
-        // Create axes for time chart
-        const timeXAxis = timeSvg.append("g")
-            .attr("class", "x-axis")
-            .attr("transform", `translate(0,${timeHeight})`)
-            .call(d3.axisBottom(timeX).tickFormat(d3.format("d")));
-
-        const timeYAxis = timeSvg.append("g")
-            .attr("class", "y-axis")
-            .call(d3.axisLeft(timeY));
-
-        // Add axis labels for time chart
-        timeSvg.append("text")
-            .attr("class", "axis-label")
-            .attr("x", timeWidth / 2)
-            .attr("y", timeHeight + timeMargin.bottom - 10)
-            .style("text-anchor", "middle")
-            .text("Year");
-
-        timeSvg.append("text")
-            .attr("class", "axis-label")
-            .attr("transform", "rotate(-90)")
-            .attr("x", -timeHeight / 2)
-            .attr("y", -timeMargin.left + 15)
-            .style("text-anchor", "middle")
-            .text("Consumption (pounds per capita)");
-
-        // Add chart title for time chart
-        timeSvg.append("text")
-            .attr("x", timeWidth / 2)
-            .attr("y", -20)
-            .attr("text-anchor", "middle")
-            .style("font-size", "16px")
-            .text("Trend of U.S. Seafood Consumption Over Time");
-
-        // Color scale for categories
-        const timeColor = d3.scaleOrdinal()
-            .domain(["Fresh and Frozen", "Canned", "Cured"])
-            .range(["#1f77b4", "#ff7f0e", "#2ca02c"]);
-
-        // Create line generator
-        const line = d3.line()
-            .x(d => timeX(d.year))
-            .y(d => timeY(d.pounds));
-
-        // Group data by category
-        const dataByCategory = d3.group(seafoodData, d => d.category);
-
-        // Create checkbox filters for categories
-        const categories = Array.from(dataByCategory.keys());
-        const categoryFilters = d3.select("#category-filters");
-
-        categories.forEach(category => {
-            categoryFilters.append("label")
-                .attr("class", "checkbox-label")
-                .html(`<input type="checkbox" class="category-checkbox" value="${category}" checked> ${category}`)
-                .attr("title", category);
-        });
-
-        // Initialize zoom behavior for time chart
-        const timeZoom = d3.zoom()
-            .scaleExtent([1, 10])
-            .translateExtent([[0, 0], [timeWidth, timeHeight]])
-            .extent([[0, 0], [timeWidth, timeHeight]])
-            .on("zoom", timeZoomed);
-
-        timeSvg.call(timeZoom);
-
-        // Draw initial lines for time chart
-        updateTimeChart();
-
-        // Set up event listeners for time chart
-        d3.selectAll(".category-checkbox").on("change", updateTimeChart);
+        // ==============================================
+        // TIME TREND VISUALIZATION
+        // ==============================================
         
-        // Zoom controls for time chart
-        d3.select("#zoom-in").on("click", () => {
-            timeSvg.transition().call(timeZoom.scaleBy, 2);
-        });
+        // Variables to store our chart components
+        let timeSvg, timeX, timeY, timeColor, line;
+        let seafoodData = [];
+        
+        // Load data from CSV file
+        function loadData() {
+            d3.csv("seafood_data.csv").then(function(data) {
+                // Process the loaded data
+                seafoodData = data.map(function(d) {
+                    return {
+                        year: +d.year,        // Convert to number
+                        category: d.category,
+                        pounds: +d.pounds     // Convert to number
+                    };
+                });
+                
+                // Initialize the chart
+                initTimeChart();
+                
+                // Remove loading message
+                d3.select("#time-chart .loading").remove();
+            }).catch(function(error) {
+                console.error("Error loading the data:", error);
+                d3.select("#time-chart .loading").text("Error loading data. Please check console for details.");
+            });
+        }
+        
+        // Initialize the time chart
+        function initTimeChart() {
+            // Set up dimensions and margins
+            const timeMargin = { top: 50, right: 80, bottom: 70, left: 60 };
+            const timeWidth = 900 - timeMargin.left - timeMargin.right;
+            const timeHeight = 400 - timeMargin.top - timeMargin.bottom;
 
-        d3.select("#zoom-out").on("click", () => {
-            timeSvg.transition().call(timeZoom.scaleBy, 0.5);
-        });
+            // Create SVG container
+            timeSvg = d3.select("#time-chart")
+                .append("svg")
+                .attr("width", timeWidth + timeMargin.left + timeMargin.right)
+                .attr("height", timeHeight + timeMargin.top + timeMargin.bottom)
+                .append("g")
+                .attr("transform", `translate(${timeMargin.left},${timeMargin.top})`);
 
-        d3.select("#reset-zoom").on("click", () => {
-            timeSvg.transition().call(timeZoom.transform, d3.zoomIdentity);
-        });
+            // Create scales
+            timeX = d3.scaleLinear()
+                .domain(d3.extent(seafoodData, d => d.year))
+                .range([0, timeWidth]);
 
-        // Tooltip
-        const tooltip = d3.select("#tooltip");
+            timeY = d3.scaleLinear()
+                .domain([0, d3.max(seafoodData, d => d.pounds) * 1.1])
+                .range([timeHeight, 0]);
+
+            // Create axes
+            timeSvg.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", `translate(0,${timeHeight})`)
+                .call(d3.axisBottom(timeX).tickFormat(d3.format("d")));
+
+            timeSvg.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(timeY));
+
+            // Add axis labels
+            timeSvg.append("text")
+                .attr("class", "axis-label")
+                .attr("x", timeWidth / 2)
+                .attr("y", timeHeight + timeMargin.bottom - 10)
+                .style("text-anchor", "middle")
+                .text("Year");
+
+            timeSvg.append("text")
+                .attr("class", "axis-label")
+                .attr("transform", "rotate(-90)")
+                .attr("x", -timeHeight / 2)
+                .attr("y", -timeMargin.left + 15)
+                .style("text-anchor", "middle")
+                .text("Consumption (pounds per capita)");
+
+            // Add chart title
+            timeSvg.append("text")
+                .attr("x", timeWidth / 2)
+                .attr("y", -20)
+                .attr("text-anchor", "middle")
+                .style("font-size", "16px")
+                .text("Trend of U.S. Seafood Consumption Over Time");
+
+            // Color scale for categories
+            timeColor = d3.scaleOrdinal()
+                .domain(["Fresh and Frozen", "Canned", "Cured"])
+                .range(["#1f77b4", "#ff7f0e", "#2ca02c"]);
+
+            // Create line generator
+            line = d3.line()
+                .x(d => timeX(d.year))
+                .y(d => timeY(d.pounds));
+
+            // Group data by category
+            const dataByCategory = d3.group(seafoodData, d => d.category);
+
+            // Create checkbox filters for categories
+            const categories = Array.from(dataByCategory.keys());
+            const categoryFilters = d3.select("#category-filters");
+
+            categories.forEach(category => {
+                categoryFilters.append("label")
+                    .attr("class", "checkbox-label")
+                    .html(`<input type="checkbox" class="category-checkbox" value="${category}" checked> ${category}`)
+                    .attr("title", category);
+            });
+
+            // Initialize zoom behavior
+            const timeZoom = d3.zoom()
+                .scaleExtent([1, 10])
+                .translateExtent([[0, 0], [timeWidth, timeHeight]])
+                .extent([[0, 0], [timeWidth, timeHeight]])
+                .on("zoom", timeZoomed);
+
+            timeSvg.call(timeZoom);
+
+            // Draw initial lines
+            updateTimeChart();
+
+            // Set up event listeners
+            d3.selectAll(".category-checkbox").on("change", updateTimeChart);
+            
+            // Zoom controls
+            d3.select("#zoom-in").on("click", () => {
+                timeSvg.transition().call(timeZoom.scaleBy, 2);
+            });
+
+            d3.select("#zoom-out").on("click", () => {
+                timeSvg.transition().call(timeZoom.scaleBy, 0.5);
+            });
+
+            d3.select("#reset-zoom").on("click", () => {
+                timeSvg.transition().call(timeZoom.transform, d3.zoomIdentity);
+            });
+        }
 
         // Zoom function for time chart
         function timeZoomed(event) {
             const newX = event.transform.rescaleX(timeX);
-            timeXAxis.call(d3.axisBottom(newX).tickFormat(d3.format("d")));
+            timeSvg.select(".x-axis").call(d3.axisBottom(newX).tickFormat(d3.format("d")));
             
             // Redraw lines with new scale
             timeSvg.selectAll(".line")
@@ -436,6 +431,7 @@
 
         // Tooltip functions for time chart
         function showTimeTooltip(event, d) {
+            const tooltip = d3.select("#tooltip");
             tooltip.transition()
                 .duration(200)
                 .style("opacity", 0.9);
@@ -448,6 +444,15 @@
                 .style("left", (event.pageX + 10) + "px")
                 .style("top", (event.pageY - 28) + "px");
         }
+
+        function hideTooltip() {
+            const tooltip = d3.select("#tooltip");
+            tooltip.style("opacity", 0);
+        }
+
+        // Start loading the data when the page loads
+        loadData();
+        
         const stateData = [
             { state: "Alabama", region: "South", population: 4903185, totalConsumption: 125.4, perCapita: 25.6 },
             { state: "Alaska", region: "West", population: 731545, totalConsumption: 98.7, perCapita: 135.0 },
